@@ -12,6 +12,7 @@ from chemprop.nn.metrics import (
     CrossEntropyLoss,
     DirichletLoss,
     EvidentialLoss,
+    MaskedMSE,
     MulticlassMCCLoss,
     MVELoss,
     Wasserstein,
@@ -60,6 +61,26 @@ def test_BoundedMSE(preds, targets, mask, weights, task_weights, lt_mask, gt_mas
     bmse_loss = BoundedMSE(task_weights)
     loss = bmse_loss(preds, targets, mask, weights, lt_mask, gt_mask)
     torch.testing.assert_close(loss, mse)
+
+
+def test_masked_mse_ignores_nan_targets():
+    preds = torch.tensor([[1.0, 2.0], [3.0, 4.0]], dtype=torch.float32)
+    targets = torch.tensor([[1.0, float("nan")], [5.0, 6.0]], dtype=torch.float32)
+
+    loss = MaskedMSE()(preds, targets)
+
+    expected = torch.tensor(8.0 / 3.0, dtype=torch.float32)
+    torch.testing.assert_close(loss, expected)
+
+
+def test_masked_mse_all_nan_targets_returns_zero():
+    preds = torch.tensor([[1.0, 2.0]], dtype=torch.float32)
+    targets = torch.tensor([[float("nan"), float("nan")]], dtype=torch.float32)
+
+    loss = MaskedMSE()(preds, targets)
+
+    expected = torch.tensor(0.0, dtype=torch.float32)
+    torch.testing.assert_close(loss, expected)
 
 
 @pytest.mark.parametrize(

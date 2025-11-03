@@ -15,6 +15,7 @@ __all__ = [
     "LossFunctionRegistry",
     "MetricRegistry",
     "MSE",
+    "MaskedMSE",
     "MAE",
     "RMSE",
     "BoundedMixin",
@@ -131,6 +132,30 @@ MetricRegistry = ClassRegistry[ChempropMetric]()
 class MSE(ChempropMetric):
     def _calc_unreduced_loss(self, preds: Tensor, targets: Tensor, *args) -> Tensor:
         return F.mse_loss(preds, targets, reduction="none")
+
+
+@LossFunctionRegistry.register(("masked-mse", "masked_mse"))
+@MetricRegistry.register(("masked-mse", "masked_mse"))
+class MaskedMSE(MSE):
+    def update(
+        self,
+        preds: Tensor,
+        targets: Tensor,
+        mask: Tensor | None = None,
+        weights: Tensor | None = None,
+        lt_mask: Tensor | None = None,
+        gt_mask: Tensor | None = None,
+    ) -> None:
+        """Ignore missing target values (NaNs) when computing the MSE."""
+        valid_targets = ~torch.isnan(targets)
+        mask = valid_targets if mask is None else mask & valid_targets
+        safe_targets = torch.where(mask, targets, torch.zeros_like(targets))
+        super().update(preds, safe_targets, mask, weights, lt_mask, gt_mask)
+
+    def compute(self):
+        if self.num_samples.item() == 0:
+            return self.total_loss.new_tensor(0.0)
+        return super().compute()
 
 
 @MetricRegistry.register("mae")
